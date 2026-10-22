@@ -1,6 +1,9 @@
 import numpy as np
 import pyxdf
 import pickle
+import yaml
+
+from src.preprocessing import OnlineBandpass
 
 # LOAD XDF FILE AND SEPARATE STREAMS
 xdf_path = "/mnt/c/Users/Gianluca/Downloads/sub-P002/ses-S001/eeg/sub-P002_ses-S001_task-Default_run-001_eeg.xdf"  # Update with your .xdf file path
@@ -8,6 +11,17 @@ streams, header = pyxdf.load_xdf(xdf_path)
 
 eeg_stream = None
 marker_stream = None
+CONFIG_PATH = "config.yaml"
+
+with open(CONFIG_PATH) as f:
+    cfg = yaml.safe_load(f)
+
+filter = OnlineBandpass(
+    cfg["sampling_rate"],
+    cfg["filter"]["low"],
+    cfg["filter"]["high"],
+    cfg["channels"]
+)
 
 def get_stream_data(stream):
     # Identify streams by type or name
@@ -22,6 +36,8 @@ def get_stream_data(stream):
 
     # Extract data matrices and timestamps
     eeg_data = np.array(eeg_stream['time_series'])       # Shape: (samples, channels)
+    filtered_eeg_data = filter.process(eeg_data)  # Apply bandpass filter to EEG data
+
     eeg_timestamps = np.array(eeg_stream['time_stamps'])  # Shape: (samples,)
     fs = float(eeg_stream['info']['nominal_srate'][0])     # Nominal sampling rate (e.g., 250 Hz)
 
@@ -31,7 +47,7 @@ def get_stream_data(stream):
     print(f"Loaded EEG Stream: {eeg_data.shape[1]} channels @ {fs:.1f} Hz ({eeg_data.shape[0]} samples)")
     print(f"Loaded Marker Stream: {len(marker_series)} markers found")
 
-    return eeg_data, eeg_timestamps, marker_series, marker_timestamps, fs
+    return filtered_eeg_data, eeg_timestamps, marker_series, marker_timestamps, fs
 
 # EPOCH EEG DATA AROUND MARKERS (hint: find the closest EEG timestamps to marker timestamp)
 # you can also infer 'y' based on your markers: IMAGERY_LEFT, CUE_RIGHT, etc. 
