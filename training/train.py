@@ -24,14 +24,13 @@ def epoch_to_features(epochs, fs=250, band=[8, 30]):
     Now uses filfilt as we construct the LDA offline. Needs
     to be change for quasi-causal or lfilter when deployed online.
     """
+    psd = BandPower(fs = fs, band = band)
     b, a =  butter(4, band, fs = fs, btype= 'band')
     features = []
     for epoch in epochs:
         epoch = epoch[:, CHANNEL_IDX] #assuming epoch shape is (samples, channels)
         filtered_epoch = lfilter(b, a, epoch)
-        psd = np.square(filtered_epoch)
-        psd = psd.mean(axis = 0)
-        feat = np.log10(psd)  # Log-transform the PSD values
+        feat = psd.compute(filtered_epoch)
         features.append(feat)
 
     return np.array(features)
