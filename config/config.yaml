@@ -17,4 +17,4 @@ classifier:
   type: lda
 
 feedback:
-  smoothing: 0.9
+  smoothing: 0.5

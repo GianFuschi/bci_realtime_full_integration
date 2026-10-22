@@ -8,8 +8,8 @@ class SlidingWindow:
         self.buffer = []
         self.counter = 0
 
-    def update(self, sample):
-        self.buffer.append(sample)
+    def update(self, chunk):
+        "Bug: self.counter should only increment when the buffer is full. Currently it is also no quasi-causal. Take a predetrmined delay into account. Also need to make it work with pull chunk but make step size okay."
         self.counter += 1
         if len(self.buffer) > self.size:
             self.buffer.pop(0)

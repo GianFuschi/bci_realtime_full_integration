@@ -1,6 +1,7 @@
 import time
 
 class Profiler:
+    "Stores times for latency?"
     def __init__(self):
         self.times = {}
 
