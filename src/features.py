@@ -27,41 +27,62 @@ class SlidingWindow:
         self.buffer = np.empty((0, channels))
         self.counter = 0
         self.is_full = False
-        self.start_time = None
+        # self.start_time = None
 
     # clock to measure how long to fill up the first window
-    def start_clock(self):
-        self.start_time = lsl.local_clock()
+    # def start_clock(self):
+    #     self.start_time = lsl.local_clock()
 
-    def update(self, sample):
+    def slide_window(self):
+        if len(self.buffer) > self.size:
+            self.buffer = self.buffer[-self.size:]
+
+    def resolve_overflow(self, chunk, overflow):
+        remainder = None
+        if overflow > 0:
+            overflow_index = len(chunk) - overflow
+            remainder = chunk[overflow_index:]
+            chunk = chunk[:overflow_index]
+        self.buffer = np.vstack((self.buffer, chunk))
+
+        return remainder
+
+    def update(self, chunk):
             
-        sample = np.array(sample)
-        self.buffer = np.vstack((self.buffer, sample))
+        chunk = np.array(chunk)
+        remainder = None
 
         if self.is_full:
-            self.counter += len(sample)
+            self.counter += len(chunk)
+            #First I only want to add a maximum extra of the step size
+            overflow = self.counter - self.step #We do not want to add more than the step size to the buffer, but rather exactly return with every step size.
+            remainder = self.resolve_overflow(chunk, overflow)
+            self.slide_window()
+        else:
+            overflow = len(chunk) + len(self.buffer) - self.size
+            remainder = self.resolve_overflow(chunk, overflow)
 
-        # sliding window: keep the last 'window size' samples
-        if len(self.buffer) > self.size:
-            self.buffer = self.buffer[-self.size:]      
 
-        # return window only when the 'sliding' reaches the step size 
-        if len(self.buffer) == self.size and self.counter % self.step == 0:
+        # return window only when the 'sliding' reaches or exceeds the step size 
+        if len(self.buffer) >= self.size and (self.counter >= self.step or self.counter == 0):
 
-            if not self.is_full:
-                self.is_full = True
-                end_time = lsl.local_clock()
-                time_span = end_time - self.start_time
-                print(f"Time taken to full up buffer: {time_span:.2f} seconds")
-                print(f"Size of window {self.buffer.shape}")
+            self.is_full = True
 
-            
-            if len(self.buffer.shape) > 1:
-                # removed the transpose to keep the shape as (samples, channels) for the Welch
-                return self.buffer
+            current_window = self.buffer
+
+            if remainder is not None:
+                self.buffer = np.vstack((self.buffer, remainder))
+                self.slide_window()
+                self.counter = overflow
             else:
-                return self.buffer
-            
+                self.counter = 0
+
+            return current_window
+
+                # end_time = lsl.local_clock()
+                # time_span = end_time - self.start_time
+                # print(f"Time taken to full up buffer: {time_span:.2f} seconds")
+                # print(f"Size of window {self.buffer.shape}")
 
         return None
 
