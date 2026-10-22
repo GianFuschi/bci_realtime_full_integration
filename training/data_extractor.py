@@ -11,7 +11,7 @@ streams, header = pyxdf.load_xdf(xdf_path)
 
 eeg_stream = None
 marker_stream = None
-CONFIG_PATH = "config.yaml"
+CONFIG_PATH = "config/config.yaml"
 
 with open(CONFIG_PATH) as f:
     cfg = yaml.safe_load(f)
