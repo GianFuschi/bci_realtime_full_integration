@@ -6,12 +6,12 @@ import yaml
 from src.preprocessing import OnlineBandpass
 
 # LOAD XDF FILE AND SEPARATE STREAMS
-xdf_path = "/mnt/c/Users/Gianluca/Downloads/sub-P002/ses-S001/eeg/sub-P002_ses-S001_task-Default_run-001_eeg.xdf"  # Update with your .xdf file path
+xdf_path = "/mnt/c/Users/Gianluca/Downloads/sub-P003/ses-S001/eeg/sub-P003_ses-S001_task-Default_run-001_eeg.xdf"  # Update with your .xdf file path
 streams, header = pyxdf.load_xdf(xdf_path)
 
 eeg_stream = None
 marker_stream = None
-CONFIG_PATH = "config.yaml"
+CONFIG_PATH = "config/config.yaml"
 
 with open(CONFIG_PATH) as f:
     cfg = yaml.safe_load(f)
