@@ -55,7 +55,7 @@ def train_lda(features, labels):
 
     return pipeline
 
-epochs, labels = load_epochs("src/epochs.pkl")
+epochs, labels = load_epochs("epochs.pkl")
 features = epoch_to_features(epochs)
 print(features.shape)
 
