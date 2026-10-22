@@ -4,35 +4,35 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 import pandas as pd
+import numpy as np
+import yaml
 
 import pickle
 from src.features import BandPower
-from scipy.signal import lfilter
-from scipy.signal import butter
 
 CHANNEL_IDX = [1, 3] 
 
+CONFIG_PATH = "config/config.yaml"
+with open(CONFIG_PATH) as f:
+    CFG = yaml.safe_load(f)
 
 def load_epochs(file_path):
     with open(file_path, "rb") as f:
         epochs, labels = pickle.load(f)
     return epochs, labels
 
-def epoch_to_features(epochs, fs=250, band=[8, 30]):
+def epoch_to_features(epochs, fs=CFG["sampling_rate"], band=CFG["features"]["band"]):
     """
     Convert epochs to features using band power extraction.
-    Now uses filfilt as we construct the LDA offline. Needs
-    to be change for quasi-causal or lfilter when deployed online.
+    Note that the data is already filtered using lfilter. 
     """
     psd = BandPower(fs = fs, band = band)
-    b, a =  butter(4, band, fs = fs, btype= 'band')
     features = []
     for epoch in epochs:
         epoch = epoch[:, CHANNEL_IDX] #assuming epoch shape is (samples, channels)
-        filtered_epoch = lfilter(b, a, epoch)
-        feat = psd.compute(filtered_epoch)
+        feat = psd.compute(epoch)
+        feat = np.log10(feat)  # Log-transform the features
         features.append(feat)
-
     return np.array(features)
     
 def train_lda(features, labels):
