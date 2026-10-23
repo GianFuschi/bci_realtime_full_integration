@@ -2,7 +2,6 @@ import pygame
 
 class VisualBar:
     def __init__(self, smoothing=0.9):
-        "Needs to be on its own thread to not block the main loop. Why not use a library like PyQt or Tkinter?"
         pygame.init()
         self.screen = pygame.display.set_mode((500, 200))
         self.value = 0.5

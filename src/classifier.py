@@ -13,7 +13,7 @@ class OnlineLDA:
     def predict(self, x):
         if not self.trained:
             return None
-        return int(self.model.predict([x])[0])
+        return self.model.predict_proba(x)
 
     def save(self, path):
         with open(path, 'wb') as f:

@@ -4,18 +4,16 @@ from src.preprocessing import OnlineBandpass
 from src.features import SlidingWindow, BandPower
 from src.classifier import OnlineLDA
 from src.feedback import VisualBar
-from src.profiler import Profiler
+from src.profiler import Profiler, WindowMessage, PredictionMessage, LatencyMessage
 import numpy as np
 
-from threading import Thread
+from threading import Thread, Event
 from queue import Queue
+import pylsl as lsl
 
-
-
-CHANNEL_IDX = [1, 3]
 
 class RealTimeBCI:
-    def __init__(self, config_path, classifier):
+    def __init__(self, config_path):
         with open(config_path) as f:
             cfg = yaml.safe_load(f)
 
@@ -29,107 +27,142 @@ class RealTimeBCI:
         self.window = SlidingWindow(
             cfg["window"]["size"],
             cfg["window"]["step"],
-            cfg["channels"]
+            channels=len(cfg["features"]["channel_indeces"])
 
         )
         self.features = BandPower(
             cfg["sampling_rate"],
             cfg["features"]["band"]
         )
-        self.classifier = classifier
+        self.classifier = OnlineLDA()
+        self.classifier.load(cfg["classifier"]["path"])
+
         self.feedback = VisualBar(cfg["feedback"]["smoothing"])
         self.profiler = Profiler()
 
+        self.cfg = cfg        
+
         self.window_queue = Queue(maxsize=10)
         self.prediction_queue = Queue(maxsize=10)
+        self.latency_queue = Queue(maxsize=10)
 
+        self.stop_event = Event()
 
     def data_worker(self):
-        while True:
-            chunk, _ = self.eeg.pull_chunk()
+        #measure latency between incoming chunks
+        #measure latency between windows published
+        #measure latency time to fill up window
+
+        channel_idx = self.cfg["features"]["channel_indeces"]
+        win_id = 0
+
+        start_stamp = lsl.local_clock()
+
+        while not self.stop_event.is_set():
+            chunk, timestamp = self.eeg.pull_chunk()
             if chunk is None or len(chunk) == 0:
                 continue
 
             chunk = np.array(chunk)
             chunk = self.filter.process(chunk)
-            chunk = chunk[:, CHANNEL_IDX]
+            chunk = chunk[:, channel_idx]
 
             win = self.window.update(chunk)
             if win is not None:
-                self.window_queue.put(win)
+
+                stamps = {"start_stamp": start_stamp,
+                          "win_stamp": lsl.local_clock()}
+                #If win_id is 0 then the difference is the time it takes to fill up the buffer
+
+                message = WindowMessage(window=win,
+                                        window_id=win_id,
+                                        stamps=stamps)
+                self.window_queue.put(message)
+                print("Extracted first window")
+
+                start_stamp = timestamp[0]
+                win_id += 1
 
     def prediction_worker(self):
-        while True:
-            win = self.window_queue.get()
+        while not self.stop_event.is_set():
+            win_message = self.window_queue.get(timeout=10)
             try:
-                feats = self.features.compute(win) #We can move this to the data loop if there is too much of a time difference.
-                pred = self.classifier.predict(feats)
+
+                feats = self.features.compute(win_message.window)
+
+                feature_stamp = lsl.local_clock()
+
+                feats = np.expand_dims(feats, axis=0) #add batch dim
+                pred = self.classifier.predict(feats) # (1, n_classes)
+                pred = np.squeeze(pred, axis=0) #remove batch dim
+
                 if pred is not None:
                     #Do we wanna transfer to numbers here?
-                    self.prediction_queue.put(pred)    
+                    pred = pred[0] #Need to check if this is indeed target dim
+
+                    stamps = win_message.stamps
+                    stamps["feature_stamp"] = feature_stamp
+                    stamps["prediction_stamp"] = lsl.local_clock()
+
+                    message = PredictionMessage(prediction=pred,
+                                                window_id=win_message.window_id,
+                                                stamps=stamps
+                                                )
+                    self.prediction_queue.put(message)    
+                    print("Made prediction")
             finally:
                 self.window_queue.task_done()
 
     def visualization_worker(self):
-        while True:
-            pred = self.prediction_queue.get()
+        while not self.stop_event.is_set():
+            pred_message = self.prediction_queue.get(timeout=10)
             try:
-                self.feedback.update(float(pred))
+                self.feedback.update(float(pred_message.prediction))
+                stamps = pred_message.stamps
+                stamps["feedback_stamp"] = lsl.local_clock()
+                lat_message = LatencyMessage(window_id=pred_message.window_id,
+                                             stamps=stamps)
+                self.latency_queue.put(lat_message)
             finally:
                 self.prediction_queue.task_done()
 
+    def profiler_worker(self):
+        while not self.stop_event.is_set():
+            lat_message = self.latency_queue.get(timeout=10)
+            try:
+                self.profiler.update(lat_message)
+            finally:
+                self.latency_queue.task_done()
+
     def run(self):
-        data_thread = Thread(target=self.data_worker, daemon=True)
-        prediction_thread = Thread(target=self.prediction_worker, daemon=True)
-        visualization_thread = Thread(target=self.visualization_worker, daemon=True)
+        threads = [
+            Thread(target=self.data_worker),
+            Thread(target=self.prediction_worker),
+            Thread(target=self.visualization_worker),
+            Thread(target=self.profiler_worker)
+        ]
+        try:
+            for thread in threads:
+                thread.start()
 
-        data_thread.start()
-        prediction_thread.start()
-        visualization_thread.start()
+            for thread in threads:
+                thread.join()
+        except KeyboardInterrupt:
+            print("Stopping pipeline")
+            #Send message to the profiler to log final value?
 
-        data_thread.join()
-        prediction_thread.join()
-        visualization_thread.join()
-        
-    # def run(self):
-    #     #check efficiency of this loop
-    #     #make a train function with data extraction?
-    #     while True:
-    #         self.profiler.tic("loop")
+        finally:
+            self.stop_event.set()
 
-    #         chunk, timestamps = self.eeg.pull_chunk()
-    #         if chunk is None or len(chunk) == 0:
-    #             # print("no data received, skipping iteration")
-    #             continue
+            for thread in threads:
+                if thread.is_alive():
+                    thread.join(timeout=2)
 
-    #         # chunk = chunk[:, CHANNEL_IDX] #chunk is a 2D array with shape (n_samples, n_channels)
-    #         chunk = np.array(chunk)
-    #         # print(chunk.shape) #shape is (samples, channels)
+            self.profiler.log()
 
-    #         chunk = self.filter.process(chunk) #check if works with pull chunk
-
-    #         # print(chunk.shape) #shape is (samples, channels)
-
-    #         chunk = chunk[:, CHANNEL_IDX] #chunk is a 2D array with shape (n_samples, n_channels)
-    #         # print(chunk.shape) #shape is (samples, channels)
-
-
-
-    #         #ch
-    #         win = self.window.update(chunk)
-
-    #         if win is not None:
-    #             feats = self.features.compute(win)
-    #             pred = self.classifier.predict(feats)
-    #             if pred is not None:
-    #                 self.feedback.update(float(pred))
-
-    #         loop_time = self.profiler.toc("loop")
-    #         # print(f"Loop time: {loop_time:.4f}s")
-
+            print("Cleaned up threads and finished shutdown")
         
 
 if __name__ == "__main__":
-    classifier = OnlineLDA()
-    bci = RealTimeBCI("config/config.yaml", classifier)
+    bci = RealTimeBCI("config/config.yaml")
     bci.run()

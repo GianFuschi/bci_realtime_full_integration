@@ -4,3 +4,4 @@ scikit-learn
 pylsl
 pygame
 pyyaml
+river

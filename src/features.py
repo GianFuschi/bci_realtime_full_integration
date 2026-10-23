@@ -79,11 +79,6 @@ class SlidingWindow:
 
             return current_window
 
-                # end_time = lsl.local_clock()
-                # time_span = end_time - self.start_time
-                # print(f"Time taken to full up buffer: {time_span:.2f} seconds")
-                # print(f"Size of window {self.buffer.shape}")
-
         return None
 
 
