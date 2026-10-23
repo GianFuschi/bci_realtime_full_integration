@@ -6,7 +6,7 @@ import yaml
 from src.preprocessing import OnlineBandpass
 
 # LOAD XDF FILE AND SEPARATE STREAMS
-XDF_PATH = "/mnt/c/Users/Gianluca/Downloads/sub-P003/ses-S001/eeg/sub-P003_ses-S001_task-Default_run-001_eeg.xdf"  # Update with your .xdf file path
+XDF_PATH = "raw_signal/sub-P003/ses-S001/eeg/sub-P003_ses-S001_task-Default_run-001_eeg.xdf"  # Update with your .xdf file path
 
 # eeg_stream = None
 # marker_stream = None
@@ -80,7 +80,7 @@ class Extractor():
         print(f"Max epoch length: {max_length}, Min epoch length: {min_length}")
             
         new_epochs = [epoch[:min_length] for epoch in epochs]
-        print(f"Epochs shape: {len(new_epochs)} epochs, each with {min_length} samples and {eeg_data.shape[1]} channels")
+        # print(f"Epochs shape: {len(new_epochs)} epochs, each with {min_length} samples and {data[1]} channels")
         del epochs
         return np.array(new_epochs)
 
