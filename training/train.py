@@ -1,7 +1,6 @@
 import numpy as np
 from sklearn.model_selection import StratifiedKFold, cross_val_score 
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 import pandas as pd
 import numpy as np
@@ -9,64 +8,76 @@ import yaml
 
 import pickle
 from src.features import BandPower
+from src.classifier import OnlineLDA 
+import numpy as np
 
-CHANNEL_IDX = [1, 3] 
 
-CONFIG_PATH = "config/config.yaml"
-with open(CONFIG_PATH) as f:
-    CFG = yaml.safe_load(f)
+class Trainer():
+    def __init__(self, config_path="config/config.yaml"):
+        with open(config_path) as f:
+            cfg = yaml.safe_load(f)
 
-def load_epochs(file_path):
-    with open(file_path, "rb") as f:
-        epochs, labels = pickle.load(f)
-    return epochs, labels
-
-def epoch_to_features(epochs, fs=CFG["sampling_rate"], band=CFG["features"]["band"]):
-    """
-    Convert epochs to features using band power extraction.
-    Note that the data is already filtered using lfilter. 
-    """
-    psd = BandPower(fs = fs, band = band)
-    features = []
-    for epoch in epochs:
-        epoch = epoch[:, CHANNEL_IDX] #assuming epoch shape is (samples, channels)
-        feat = psd.compute(epoch)
-        feat = np.log10(feat)  # Log-transform the features
-        features.append(feat)
-    return np.array(features)
-    
-def train_lda(features, labels):
-    """
-    Train an LDA classifier using the provided features and labels.
-    """
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    pipeline = Pipeline([('scaler', StandardScaler()),
-                          ('classifier', LinearDiscriminantAnalysis())])
-
-    print(labels)
-    print(features)
-
-    scores = cross_val_score(pipeline, features, labels, cv=cv, scoring='balanced_accuracy', error_score='raise')
-    # cross_val_score only returns the scores, not the fitted model. We have to fit it to save it.
-    pipeline.fit(features, labels)
+        self.cfg = cfg
         
-    print(f"Cross-validated accuracy: {np.mean(scores):.4f} ± {np.std(scores):.4f}")
-    print(f"Individual fold accuracies: {scores}")
+        self.psd = BandPower(fs=cfg["sampling_rate"], band=cfg["features"]["band"])
+        self.final_model = OnlineLDA()
+        self.cv_pipeline = Pipeline([('classifier', LinearDiscriminantAnalysis())])
+        self.folds = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
-    return pipeline
+    def load_epochs(self):
+        file_path = self.cfg["features"]["raw_epochs"]
+        with open(file_path, "rb") as f:
+            epochs, labels = pickle.load(f)
+        return epochs, labels
 
-epochs, labels = load_epochs("epochs.pkl")
-features = epoch_to_features(epochs)
-print(features.shape)
+    def epoch_to_features(self, epochs):
+        """
+        Convert epochs to features using band power extraction.
+        Note that the data is already filtered using lfilter. 
+        """
+        features = []
+        channel_idx = self.cfg["features"]["channel_indeces"]
 
-features_left = features[labels == 'IMAGERY_LEFT']
-print(len(features_left))
-features_right = features[labels == 'IMAGERY_RIGHT']
+        for epoch in epochs:
 
-data_left = pd.DataFrame(features_left)
-data_left.to_csv("recorded_features_left.csv", index=False, header=False)
-data_right = pd.DataFrame(features_right)
-data_right.to_csv("recorded_features_right.csv", index=False, header=False)
-pipeline = train_lda(features, labels)
-with open('model_weights.pkl', 'wb') as f:
-        pickle.dump(pipeline, f)
+            epoch = epoch[:, channel_idx] #assuming epoch shape is (samples, channels)
+            feat = self.psd.compute(epoch)
+            print("WE CAN EXPERIMENT HERE WITH AND WITHOUT LOGGING -> supposed to help with normal dist assumption LDA")
+            feat = np.log10(feat)  # Log-transform the features
+            features.append(feat)
+    
+        return np.array(features)
+        
+    def train_lda(self, features, labels):
+        """
+        Train an LDA classifier using the provided features and labels.
+        """
+        scores = cross_val_score(self.cv_pipeline,
+                                 features,
+                                 labels,
+                                 cv=self.folds,
+                                 scoring='balanced_accuracy',
+                                 error_score='raise')
+        
+        print(f"Cross-validated accuracy: {np.mean(scores):.4f} ± {np.std(scores):.4f}")
+        print(f"Individual fold accuracies: {scores}")
+        
+        self.final_model.train(features, labels)
+        self.final_model.save(self.cfg["classifier"]["path"])
+
+    def save_features(self, features, labels, label):
+        f = features[labels == label]
+        f = pd.DataFrame(f)
+        f.to_csv(f"recorded_features_{label}.csv", index=False, header=False)
+
+    def train(self):
+        epochs, labels = self.load_epochs()
+        features = self.epoch_to_features(epochs)
+        unique_labels = np.unique(labels)
+        for label in unique_labels:
+            self.save_features(features, labels, label)
+        self.train_lda(features, labels)
+        
+    
+trainer = Trainer()
+trainer.train()
