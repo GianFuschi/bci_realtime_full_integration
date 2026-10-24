@@ -89,12 +89,17 @@ class RealTimeBCI:
             try:
 
                 feats = self.features.compute(win_message.window)
-
+                feats = np.log10(feats) # added log
+                
                 feature_stamp = lsl.local_clock()
 
                 feats = np.expand_dims(feats, axis=0) #add batch dim
                 pred = self.classifier.predict(feats) # (1, n_classes)
                 pred = np.squeeze(pred, axis=0) #remove batch dim
+                # test realtime bci
+                # n_classes = 2
+                # pred = np.random.rand(1, n_classes)
+                # pred = np.squeeze(pred, axis=0)
 
                 if pred is not None:
                     #Do we wanna transfer to numbers here?
