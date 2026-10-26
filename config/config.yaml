@@ -8,7 +8,7 @@ filter:
 
 window:
   size: 250
-  step: 62
+  step: 4
 
 features:
   band: [8, 12]
