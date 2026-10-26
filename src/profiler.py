@@ -24,9 +24,9 @@ class LatencyMessage:
 class Profiler():
     def __init__(self, log_file = "runningstats.log"):
         #Tuple for tunning mean and std
-        self.statistics = {"system": (stats.Mean(), stats.Var()),
+        self.statistics = {"initial_window": 0,
+                           "system": (stats.Mean(), stats.Var()),
                            "window": (stats.Mean(), stats.Var()),
-                           "initial_window": 0,
                            "PSD_feature": (stats.Mean(), stats.Var()),
                            "Predictor": (stats.Mean(), stats.Var()),
                            "Feedback": (stats.Mean(), stats.Var())}
@@ -56,8 +56,7 @@ class Profiler():
                 message[key] = item
             else:
                 message[key] = {"mean": item[0].get(),
-                                "var": item[1].get(),
-                                "std": np.sqrt(max(0.0, item[1].get()))}
+                                "var": item[1].get()}
 
         self._logger.info(f"Current running means: {message}")
 

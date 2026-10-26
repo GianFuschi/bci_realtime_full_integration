@@ -23,4 +23,3 @@ class OnlineLDA:
         with open(path, 'rb') as f:
             self.model = pickle.load(f)
         self.trained = True
-

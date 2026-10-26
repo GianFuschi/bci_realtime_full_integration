@@ -96,14 +96,9 @@ class RealTimeBCI:
                 feats = np.expand_dims(feats, axis=0) #add batch dim
                 pred = self.classifier.predict(feats) # (1, n_classes)
                 pred = np.squeeze(pred, axis=0) #remove batch dim
-                # test realtime bci
-                # n_classes = 2
-                # pred = np.random.rand(1, n_classes)
-                # pred = np.squeeze(pred, axis=0)
-
+   
                 if pred is not None:
-                    #Do we wanna transfer to numbers here?
-                    pred = pred[0] #Need to check if this is indeed target dim
+                    pred = pred[1] #Nindex 0 is left hand, 1 is right hand.
 
                     stamps = win_message.stamps
                     stamps["feature_stamp"] = feature_stamp
