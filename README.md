@@ -26,7 +26,7 @@ The `src` folder contains the following components:
 
 ### Training and Data Extraction
 
-The scripts for data extraction and model training are located in the `training` folder.
+The scripts for data extraction and model training are located in the `training` folder. The extracted epochs, features and model weights are stored in the root of the folder such that they can be easily accessed. 
 
 - **`beep.py`** - Creates a beep sound (linux specific).
 - **`data_extractor.py`** - Extracts, bandpass filters, and epochs the raw eeg data using the provided marker stream.
