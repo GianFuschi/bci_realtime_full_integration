@@ -2,23 +2,6 @@ import numpy as np
 from scipy.signal import welch
 import pylsl as lsl
 
-# class SlidingWindow:
-#     def __init__(self, size, step):
-#         self.size = size
-#         self.step = step
-#         self.buffer = []
-#         self.counter = 0
-
-#     def update(self, chunk):
-#         "Bug: self.counter should only increment when the buffer is full. Currently it is also no quasi-causal. Take a predetrmined delay into account. Also need to make it work with pull chunk but make step size okay."
-#         self.counter += 1
-#         if len(self.buffer) > self.size:
-#             self.buffer.pop(0)
-#         if len(self.buffer) == self.size and self.counter % self.step == 0:
-#             return np.array(self.buffer)
-#         return None
-
-
 class SlidingWindow:
     def __init__(self, size, step, channels):
         self.size = size
@@ -27,11 +10,6 @@ class SlidingWindow:
         self.buffer = np.empty((0, channels))
         self.counter = 0
         self.is_full = False
-        # self.start_time = None
-
-    # clock to measure how long to fill up the first window
-    # def start_clock(self):
-    #     self.start_time = lsl.local_clock()
 
     def slide_window(self):
         if len(self.buffer) > self.size:
@@ -61,7 +39,6 @@ class SlidingWindow:
         else:
             overflow = len(chunk) + len(self.buffer) - self.size
             remainder = self.resolve_overflow(chunk, overflow)
-
 
         # return window only when the 'sliding' reaches or exceeds the step size 
         if len(self.buffer) >= self.size and (self.counter >= self.step or self.counter == 0):

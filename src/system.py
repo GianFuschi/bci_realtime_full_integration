@@ -17,7 +17,7 @@ class RealTimeBCI:
         with open(config_path) as f:
             cfg = yaml.safe_load(f)
 
-        self.eeg = EEGStream(step_size=cfg["window"]["step"]) #To prevent issues with the windowing
+        self.eeg = EEGStream()
         self.filter = OnlineBandpass(
             cfg["sampling_rate"],
             cfg["filter"]["low"],
@@ -49,10 +49,6 @@ class RealTimeBCI:
         self.stop_event = Event()
 
     def data_worker(self):
-        #measure latency between incoming chunks
-        #measure latency between windows published
-        #measure latency time to fill up window
-
         channel_idx = self.cfg["features"]["channel_indeces"]
         win_id = 0
 
@@ -64,7 +60,7 @@ class RealTimeBCI:
                 continue
 
             chunk = np.array(chunk)
-            chunk = self.filter.process(chunk)
+            chunk = self.filter.process(chunk) #Causal bandpass filter.
             chunk = chunk[:, channel_idx]
 
             win = self.window.update(chunk)
@@ -78,8 +74,6 @@ class RealTimeBCI:
                                         window_id=win_id,
                                         stamps=stamps)
                 self.window_queue.put(message)
-                print("Extracted first window")
-
                 start_stamp = timestamp[0]
                 win_id += 1
 
@@ -98,7 +92,7 @@ class RealTimeBCI:
                 pred = np.squeeze(pred, axis=0) #remove batch dim
    
                 if pred is not None:
-                    pred = pred[1] #Nindex 0 is left hand, 1 is right hand.
+                    pred = pred[1] #index 0 is left hand, 1 is right hand.
 
                     stamps = win_message.stamps
                     stamps["feature_stamp"] = feature_stamp
@@ -109,7 +103,6 @@ class RealTimeBCI:
                                                 stamps=stamps
                                                 )
                     self.prediction_queue.put(message)    
-                    print("Made prediction")
             finally:
                 self.window_queue.task_done()
 
@@ -149,7 +142,6 @@ class RealTimeBCI:
                 thread.join()
         except KeyboardInterrupt:
             print("Stopping pipeline")
-            #Send message to the profiler to log final value?
 
         finally:
             self.stop_event.set()

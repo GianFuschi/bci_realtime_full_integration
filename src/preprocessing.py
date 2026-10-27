@@ -2,7 +2,6 @@ import numpy as np
 from scipy.signal import butter, lfilter
 
 class OnlineBandpass:
-    "No use for brain bad feature shit man"
     def __init__(self, fs, low, high, n_channels, order=4):
         self.b, self.a = butter(order, [low, high], btype="band", fs=fs)
         self.zi = np.zeros((max(len(self.a), len(self.b)) - 1, n_channels))
